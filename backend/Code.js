@@ -1,6 +1,6 @@
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v4';
+const API_VERSION = '2026-06-03-data-schema-v5';
 const SHEET_SCHEMA = {
   data: {
     sheetName: 'Data',
@@ -15,21 +15,20 @@ const SHEET_SCHEMA = {
     },
   },
   studentInfo: {
-    sheetName: 'Student info',
+    sheetName: 'Student Info',
+    sheetNames: [
+      'Student Info',
+      'Student info',
+    ],
     columns: {
-      qrCode: 'QRcode',
+      refinedQRCode: 'Refined_QRcode',
     },
     columnAliases: {
-      qrCode: [
-        'QRcode',
-        'QR code',
-        'QR Code',
-        'QRCode',
-        'QRcode data',
-        'QR Code data',
-        'Candidate Code',
-        'Student Code',
-        '考生編號',
+      refinedQRCode: [
+        'Refined_QRcode',
+        'Refined QRcode',
+        'Refined QR code',
+        'Refined_QRCode',
       ],
     },
   },
@@ -219,15 +218,11 @@ function handleJsonpRecord_(params) {
 function isValidManualCode_(manualCode) {
   const code = String(manualCode || '').trim();
   const sheet = getQrCodeLookupSheet_();
-  const qrCodeColumn = getHeaderColumnIndex_(sheet, SHEET_SCHEMA.studentInfo.columnAliases.qrCode, false);
+  const qrCodeColumn = getHeaderColumnIndex_(sheet, SHEET_SCHEMA.studentInfo.columnAliases.refinedQRCode);
   const lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
     return false;
-  }
-
-  if (!qrCodeColumn) {
-    return sheetContainsExactValue_(sheet, code);
   }
 
   const values = sheet.getRange(2, qrCodeColumn, lastRow - 1, 1).getValues();
@@ -239,13 +234,24 @@ function isValidManualCode_(manualCode) {
 
 function getQrCodeLookupSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(SHEET_SCHEMA.studentInfo.sheetName);
+  const sheet = getFirstAvailableSheet_(ss, SHEET_SCHEMA.studentInfo.sheetNames);
 
   if (!sheet) {
     throw new Error('找不到名稱為「' + SHEET_SCHEMA.studentInfo.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
   }
 
   return sheet;
+}
+
+function getFirstAvailableSheet_(spreadsheet, sheetNames) {
+  for (let index = 0; index < sheetNames.length; index += 1) {
+    const sheet = spreadsheet.getSheetByName(sheetNames[index]);
+    if (sheet) {
+      return sheet;
+    }
+  }
+
+  return null;
 }
 
 function getHeaderColumnIndex_(sheet, headerNames, shouldThrow) {
@@ -274,24 +280,6 @@ function getHeaderColumnIndex_(sheet, headerNames, shouldThrow) {
   }
 
   return headerIndex + 1;
-}
-
-function sheetContainsExactValue_(sheet, value) {
-  const normalizedValue = String(value || '').trim();
-  const lastRow = sheet.getLastRow();
-  const lastColumn = sheet.getLastColumn();
-
-  if (!normalizedValue || lastRow < 2 || lastColumn < 1) {
-    return false;
-  }
-
-  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
-
-  return values.some(function(row) {
-    return row.some(function(cell) {
-      return String(cell || '').trim() === normalizedValue;
-    });
-  });
 }
 
 function normalizeHeader_(value) {

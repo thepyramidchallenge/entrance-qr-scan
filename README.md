@@ -19,7 +19,7 @@ The backend writes rows to the `Data` sheet in this order:
 6. Final_QRCode
 7. Manual input data
 
-Manual code entry is validated against the `QRcode` column in `Student info`
+Manual code entry is validated against the `Refined_QRcode` column in `Student Info`
 before the code is written to `Data`.
 
 From `backend/`, use clasp:
