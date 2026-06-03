@@ -16,6 +16,7 @@ let lastDecodedText = '';
 let lastLocation = '';
 let isProcessing = false;
 let html5QrCode = null;
+let isScannerStarting = false;
 
 document.querySelectorAll('[data-location]').forEach((button) => {
   button.addEventListener('click', () => selectLocation(button.dataset.location));
@@ -45,6 +46,10 @@ async function goBack() {
 }
 
 function startScanning() {
+  if (isScannerStarting || (html5QrCode && html5QrCode.isScanning)) {
+    return;
+  }
+
   setStatus('');
   setError('');
 
@@ -52,6 +57,7 @@ function startScanning() {
     html5QrCode = new Html5Qrcode('qr-reader');
   }
 
+  isScannerStarting = true;
   const qrboxSize = Math.min(window.innerWidth * 0.8, 520);
 
   html5QrCode.start(
@@ -61,6 +67,8 @@ function startScanning() {
     () => {}
   ).catch((error) => {
     setError(`無法啟動相機：${error && error.message ? error.message : error}`);
+  }).finally(() => {
+    isScannerStarting = false;
   });
 }
 
@@ -144,6 +152,10 @@ function recordWithJsonp(payload) {
     const callbackName = `scannerCallback_${Date.now()}_${Math.round(Math.random() * 100000)}`;
     const script = document.createElement('script');
     const url = new URL(config.WEB_APP_URL);
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Apps Script backend 未有回應，請檢查網絡或部署設定。'));
+    }, 15000);
 
     Object.entries(payload).forEach(([key, value]) => {
       url.searchParams.set(key, value || '');
@@ -161,6 +173,7 @@ function recordWithJsonp(payload) {
     };
 
     function cleanup() {
+      window.clearTimeout(timeout);
       delete window[callbackName];
       script.remove();
     }
