@@ -12,9 +12,12 @@ This repo separates the scanner frontend from the Google Apps Script backend.
 The backend writes rows to the `Data` sheet in this order:
 
 1. Timestamp
-2. Location
-3. Decoded QR text
-4. Remark
+2. Decoded QR text
+3. Candidate Code
+4. Class
+5. Session
+6. Name
+7. Remark
 
 From `backend/`, use clasp:
 

@@ -1,8 +1,5 @@
 const config = window.SCANNER_CONFIG || {};
-const locationView = document.getElementById('location-view');
-const scannerView = document.getElementById('scanner-view');
-const backButton = document.getElementById('back-button');
-const currentLocation = document.getElementById('current-location');
+const dialogBackdrop = document.getElementById('dialog-backdrop');
 const confirmDialog = document.getElementById('confirm-dialog');
 const decodedTextElement = document.getElementById('decoded-text');
 const remarkInput = document.getElementById('remark');
@@ -11,39 +8,25 @@ const scannerError = document.getElementById('scanner-error');
 const statusMessage = document.getElementById('status');
 const cancelButton = document.getElementById('cancel-button');
 const confirmButton = document.getElementById('confirm-button');
+const manualCodeButton = document.getElementById('manual-code-button');
+const manualDialog = document.getElementById('manual-dialog');
+const manualCodeInput = document.getElementById('manual-code');
+const manualDialogError = document.getElementById('manual-error-message');
+const manualCancelButton = document.getElementById('manual-cancel-button');
+const manualConfirmButton = document.getElementById('manual-confirm-button');
 
 let lastDecodedText = '';
-let lastLocation = '';
 let isProcessing = false;
 let html5QrCode = null;
 let isScannerStarting = false;
+let scannerStartPromise = null;
 
-document.querySelectorAll('[data-location]').forEach((button) => {
-  button.addEventListener('click', () => selectLocation(button.dataset.location));
-});
-
-backButton.addEventListener('click', goBack);
 cancelButton.addEventListener('click', cancelScan);
 confirmButton.addEventListener('click', confirmScan);
-
-function selectLocation(location) {
-  lastLocation = location;
-  locationView.hidden = true;
-  scannerView.hidden = false;
-  backButton.classList.add('is-visible');
-  currentLocation.textContent = `你現在處於：${lastLocation}`;
-  startScanning();
-}
-
-async function goBack() {
-  await stopScanning();
-  scannerView.hidden = true;
-  locationView.hidden = false;
-  confirmDialog.hidden = true;
-  backButton.classList.remove('is-visible');
-  currentLocation.textContent = '';
-  setStatus('');
-}
+manualCodeButton.addEventListener('click', openManualDialog);
+manualCancelButton.addEventListener('click', closeManualDialog);
+manualConfirmButton.addEventListener('click', confirmManualCode);
+document.addEventListener('DOMContentLoaded', startScanning);
 
 function startScanning() {
   if (isScannerStarting || (html5QrCode && html5QrCode.isScanning)) {
@@ -60,7 +43,7 @@ function startScanning() {
   isScannerStarting = true;
   const qrboxSize = Math.min(window.innerWidth * 0.8, 520);
 
-  html5QrCode.start(
+  scannerStartPromise = html5QrCode.start(
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: qrboxSize, height: qrboxSize } },
     onScanSuccess,
@@ -76,11 +59,15 @@ async function onScanSuccess(decodedText) {
   lastDecodedText = decodedText;
   decodedTextElement.textContent = decodedText;
   confirmDialog.hidden = false;
-  backButton.classList.remove('is-visible');
+  dialogBackdrop.hidden = false;
   await stopScanning();
 }
 
 async function stopScanning() {
+  if (isScannerStarting && scannerStartPromise) {
+    await scannerStartPromise;
+  }
+
   if (!html5QrCode || !html5QrCode.isScanning) {
     return;
   }
@@ -94,9 +81,9 @@ async function stopScanning() {
 
 function cancelScan() {
   confirmDialog.hidden = true;
+  dialogBackdrop.hidden = true;
   remarkInput.value = '';
   setError('');
-  backButton.classList.add('is-visible');
   startScanning();
 }
 
@@ -124,7 +111,6 @@ async function confirmScan() {
     const result = await recordWithJsonp({
       decodedText: lastDecodedText,
       remark: remarkInput.value,
-      location: lastLocation,
       key: config.API_KEY || '',
     });
 
@@ -133,10 +119,10 @@ async function confirmScan() {
     }
 
     confirmDialog.hidden = true;
+    dialogBackdrop.hidden = true;
     remarkInput.value = '';
     lastDecodedText = '';
     setStatus('已記錄，正在重新啟動掃描...');
-    backButton.classList.add('is-visible');
     startScanning();
   } catch (error) {
     setError(error.message || '錄入資料失敗，請重試。');
@@ -144,6 +130,74 @@ async function confirmScan() {
   } finally {
     isProcessing = false;
     setButtonsDisabled(false);
+  }
+}
+
+async function openManualDialog() {
+  if (isProcessing) {
+    return;
+  }
+
+  await stopScanning();
+  manualDialog.hidden = false;
+  dialogBackdrop.hidden = false;
+  manualCodeInput.value = '';
+  setManualError('');
+  setStatus('');
+  manualCodeInput.focus();
+}
+
+function closeManualDialog() {
+  manualDialog.hidden = true;
+  dialogBackdrop.hidden = true;
+  manualCodeInput.value = '';
+  setManualError('');
+  startScanning();
+}
+
+async function confirmManualCode() {
+  if (isProcessing) {
+    return;
+  }
+
+  const manualCode = manualCodeInput.value.trim();
+  if (!manualCode) {
+    setManualError('請輸入考生編號');
+    return;
+  }
+
+  if (!config.WEB_APP_URL) {
+    setManualError('請先在 frontend/config.js 設定 Apps Script Web App URL。');
+    return;
+  }
+
+  isProcessing = true;
+  setManualButtonsDisabled(true);
+  setStatus('正在處理...');
+  setManualError('');
+
+  try {
+    const result = await recordWithJsonp({
+      decodedText: manualCode,
+      remark: '',
+      key: config.API_KEY || '',
+    });
+
+    if (!result.ok) {
+      throw new Error(result.message || '錄入資料失敗，請重試。');
+    }
+
+    manualDialog.hidden = true;
+    dialogBackdrop.hidden = true;
+    manualCodeInput.value = '';
+    setStatus('已記錄，正在重新啟動掃描...');
+    startScanning();
+  } catch (error) {
+    setManualError(error.message || '錄入資料失敗，請重試。');
+    setStatus('');
+  } finally {
+    isProcessing = false;
+    setManualButtonsDisabled(false);
   }
 }
 
@@ -188,6 +242,11 @@ function setButtonsDisabled(disabled) {
   cancelButton.disabled = disabled;
 }
 
+function setManualButtonsDisabled(disabled) {
+  manualConfirmButton.disabled = disabled;
+  manualCancelButton.disabled = disabled;
+}
+
 function setStatus(message) {
   statusMessage.textContent = message;
   statusMessage.hidden = !message;
@@ -201,4 +260,9 @@ function setError(message) {
   target.hidden = !message;
   inactive.textContent = '';
   inactive.hidden = true;
+}
+
+function setManualError(message) {
+  manualDialogError.textContent = message;
+  manualDialogError.hidden = !message;
 }

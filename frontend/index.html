@@ -10,24 +10,21 @@
 </head>
 <body>
   <header class="app-header">
-    <button class="icon-button" id="back-button" type="button" aria-label="返回">←</button>
-    <h1>Pyramid Challenge QR Scanner</h1>
+    <h1>TPC QR Scanner</h1>
   </header>
 
   <main class="app-main">
-    <section class="location-view" id="location-view">
-      <h2>你現時處於：</h2>
-      <div class="location-actions">
-        <button class="primary-button" type="button" data-location="登記處">登記處</button>
-        <button class="primary-button" type="button" data-location="考場門口">考場門口</button>
+    <section class="scanner-view" id="scanner-view">
+      <div class="scanner-panel">
+        <div id="qr-reader"></div>
       </div>
-    </section>
-
-    <section class="scanner-view" id="scanner-view" hidden>
-      <p class="current-location" id="current-location"></p>
-      <div id="qr-reader"></div>
+      <div class="scanner-actions">
+        <button class="manual-code-button" id="manual-code-button" type="button">手寫code</button>
+      </div>
       <p class="error-message" id="scanner-error" hidden></p>
     </section>
+
+    <div class="dialog-backdrop" id="dialog-backdrop" hidden></div>
 
     <section class="dialog" id="confirm-dialog" role="dialog" aria-modal="true" hidden>
       <div class="dialog-body">
@@ -38,6 +35,17 @@
       <div class="dialog-actions">
         <button class="secondary-button" id="cancel-button" type="button">取消</button>
         <button class="primary-button" id="confirm-button" type="button">確認</button>
+      </div>
+    </section>
+
+    <section class="dialog" id="manual-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="dialog-body">
+        <input type="text" id="manual-code" placeholder="請輸入考生編號" aria-label="考生編號">
+        <p class="error-message" id="manual-error-message" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="manual-cancel-button" type="button">取消</button>
+        <button class="primary-button" id="manual-confirm-button" type="button">確認</button>
       </div>
     </section>
 
