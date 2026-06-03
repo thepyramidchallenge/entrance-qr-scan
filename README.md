@@ -19,6 +19,9 @@ The backend writes rows to the `Data` sheet in this order:
 6. Name
 7. Remark
 
+Manual code entry is validated against the `QRcode` column in `工作表7`
+before the code is written to `Data`.
+
 From `backend/`, use clasp:
 
 ```sh

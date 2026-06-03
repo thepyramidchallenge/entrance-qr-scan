@@ -177,9 +177,8 @@ async function confirmManualCode() {
   setManualError('');
 
   try {
-    const result = await recordWithJsonp({
-      decodedText: manualCode,
-      remark: '',
+    const result = await recordManualCodeWithJsonp({
+      manualCode,
       key: config.API_KEY || '',
     });
 
@@ -190,15 +189,19 @@ async function confirmManualCode() {
     manualDialog.hidden = true;
     dialogBackdrop.hidden = true;
     manualCodeInput.value = '';
-    setStatus('已記錄，正在重新啟動掃描...');
     startScanning();
+    setStatus(result.message || '已成功紀錄');
   } catch (error) {
-    setManualError(error.message || '錄入資料失敗，請重試。');
+    setManualError(error.message || '你輸入的考生編號格式錯誤');
     setStatus('');
   } finally {
     isProcessing = false;
     setManualButtonsDisabled(false);
   }
+}
+
+function recordManualCodeWithJsonp(payload) {
+  return recordWithJsonp(payload);
 }
 
 function recordWithJsonp(payload) {

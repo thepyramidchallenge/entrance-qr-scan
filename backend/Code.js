@@ -1,7 +1,9 @@
 const SHEET_NAME = 'Data';
+const QR_CODE_LOOKUP_SHEET_NAME = '工作表7';
+const QR_CODE_LOOKUP_HEADER = 'QRcode';
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-7col';
+const API_VERSION = '2026-06-03-manual-validation';
 const DATA_HEADERS = [
   'Timestamp',
   'Decoded QR text',
@@ -14,6 +16,10 @@ const DATA_HEADERS = [
 
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
+
+  if (params.callback && params.manualCode) {
+    return handleJsonpManualRecord_(params);
+  }
 
   if (params.callback && params.decodedText) {
     return handleJsonpRecord_(params);
@@ -32,11 +38,15 @@ function doPost(e) {
   try {
     const data = parseRequest_(e);
     validateApiKey_(data.key);
-    recordData(data.decodedText, data.remark);
+    if (data.manualCode) {
+      recordManualCode(data.manualCode);
+    } else {
+      recordData(data.decodedText, data.remark);
+    }
 
     return jsonResponse_({
       ok: true,
-      message: 'Recorded',
+      message: data.manualCode ? '已成功紀錄' : 'Recorded',
       version: API_VERSION,
     });
   } catch (error) {
@@ -74,6 +84,20 @@ function recordData(decodedText, remark) {
   }
 }
 
+function recordManualCode(manualCode) {
+  const code = String(manualCode || '').trim();
+
+  if (!code) {
+    throw new Error('請輸入考生編號');
+  }
+
+  if (!isValidManualCode_(code)) {
+    throw new Error('你輸入的考生編號格式錯誤');
+  }
+
+  recordData(code, '');
+}
+
 function parseStudentInfo_(decodedText) {
   const text = String(decodedText || '').trim();
   const match = text.match(/^([A-Za-z0-9]+)-([A-Za-z0-9]+)\(([^)]+)\)\s*(.*)$/);
@@ -109,6 +133,26 @@ function parseRequest_(e) {
   return e.parameter || {};
 }
 
+function handleJsonpManualRecord_(params) {
+  const callback = String(params.callback || '').replace(/[^\w$.]/g, '');
+  const response = {};
+
+  try {
+    validateApiKey_(params.key);
+    recordManualCode(params.manualCode);
+    response.ok = true;
+    response.message = '已成功紀錄';
+    response.version = API_VERSION;
+  } catch (error) {
+    response.ok = false;
+    response.message = error.message || 'Failed to record data. Please try again.';
+  }
+
+  return ContentService
+    .createTextOutput(callback + '(' + JSON.stringify(response) + ');')
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
 function handleJsonpRecord_(params) {
   const callback = String(params.callback || '').replace(/[^\w$.]/g, '');
   const response = {};
@@ -127,6 +171,53 @@ function handleJsonpRecord_(params) {
   return ContentService
     .createTextOutput(callback + '(' + JSON.stringify(response) + ');')
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
+function isValidManualCode_(manualCode) {
+  const code = String(manualCode || '').trim();
+  const sheet = getQrCodeLookupSheet_();
+  const qrCodeColumn = getHeaderColumnIndex_(sheet, QR_CODE_LOOKUP_HEADER);
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return false;
+  }
+
+  const values = sheet.getRange(2, qrCodeColumn, lastRow - 1, 1).getValues();
+
+  return values.some(function(row) {
+    return String(row[0] || '').trim() === code;
+  });
+}
+
+function getQrCodeLookupSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(QR_CODE_LOOKUP_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error('找不到名稱為「' + QR_CODE_LOOKUP_SHEET_NAME + '」的工作表，請檢查試算表內的分頁名稱。');
+  }
+
+  return sheet;
+}
+
+function getHeaderColumnIndex_(sheet, headerName) {
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastColumn < 1) {
+    throw new Error('找不到「' + headerName + '」欄。');
+  }
+
+  const headerValues = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const headerIndex = headerValues.findIndex(function(header) {
+    return String(header || '').trim() === headerName;
+  });
+
+  if (headerIndex === -1) {
+    throw new Error('找不到「' + headerName + '」欄。');
+  }
+
+  return headerIndex + 1;
 }
 
 function migrateDataSheetColumns() {
