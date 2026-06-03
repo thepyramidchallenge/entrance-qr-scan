@@ -1,6 +1,6 @@
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v6';
+const API_VERSION = '2026-06-03-data-schema-v7';
 const SHEET_SCHEMA = {
   data: {
     sheetName: 'Data',
@@ -123,7 +123,7 @@ function recordData(decodedText, remark) {
 }
 
 function recordManualCode(manualCode, remark) {
-  const code = String(manualCode || '').trim();
+  const code = cleanCandidateCode_(manualCode);
 
   if (!code) {
     throw new Error('請輸入考生編號');
@@ -217,7 +217,7 @@ function handleJsonpRecord_(params) {
 }
 
 function isValidManualCode_(manualCode) {
-  const code = String(manualCode || '').trim();
+  const code = cleanCandidateCode_(manualCode);
   const sheet = getQrCodeLookupSheet_();
   const qrCodeColumn = getHeaderColumnIndex_(sheet, SHEET_SCHEMA.studentInfo.columnAliases.refinedQRCode);
   const lastRow = sheet.getLastRow();
@@ -229,8 +229,29 @@ function isValidManualCode_(manualCode) {
   const values = sheet.getRange(2, qrCodeColumn, lastRow - 1, 1).getValues();
 
   return values.some(function(row) {
-    return String(row[0] || '').trim() === code;
+    return candidateCodesMatch_(row[0], code);
   });
+}
+
+function cleanCandidateCode_(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/[‐‑‒–—−]/g, '-')
+    .toUpperCase();
+}
+
+function candidateCodesMatch_(sheetValue, manualCode) {
+  const normalizedSheetValue = cleanCandidateCode_(sheetValue);
+  const normalizedManualCode = cleanCandidateCode_(manualCode);
+
+  if (!normalizedManualCode) {
+    return false;
+  }
+
+  return normalizedSheetValue === normalizedManualCode ||
+    normalizedSheetValue.indexOf(normalizedManualCode + '(') === 0 ||
+    normalizedSheetValue.indexOf(normalizedManualCode + '（') === 0;
 }
 
 function getQrCodeLookupSheet_() {
