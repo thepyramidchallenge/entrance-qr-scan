@@ -1,6 +1,11 @@
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v7';
+const API_VERSION = '2026-06-03-data-schema-v8';
+const CACHE_TTL_SECONDS = 300;
+const CACHE_KEYS = {
+  dataHeaderMap: 'data-header-map-v1',
+  refinedQrCodes: 'student-info-refined-qrcodes-v1',
+};
 const SHEET_SCHEMA = {
   data: {
     sheetName: 'Data',
@@ -218,6 +223,19 @@ function handleJsonpRecord_(params) {
 
 function isValidManualCode_(manualCode) {
   const code = cleanCandidateCode_(manualCode);
+
+  if (!code) {
+    return false;
+  }
+
+  const cachedCodes = getCachedRefinedQrCodes_();
+
+  if (cachedCodes) {
+    return cachedCodes.some(function(sheetValue) {
+      return candidateCodesMatch_(sheetValue, code);
+    });
+  }
+
   const sheet = getQrCodeLookupSheet_();
   const qrCodeColumn = getHeaderColumnIndex_(sheet, SHEET_SCHEMA.studentInfo.columnAliases.refinedQRCode);
   const lastRow = sheet.getLastRow();
@@ -227,10 +245,45 @@ function isValidManualCode_(manualCode) {
   }
 
   const values = sheet.getRange(2, qrCodeColumn, lastRow - 1, 1).getValues();
+  const codes = values
+    .map(function(row) {
+      return cleanCandidateCode_(row[0]);
+    })
+    .filter(function(value) {
+      return value;
+    });
 
-  return values.some(function(row) {
-    return candidateCodesMatch_(row[0], code);
+  cacheRefinedQrCodes_(codes);
+
+  return codes.some(function(sheetValue) {
+    return candidateCodesMatch_(sheetValue, code);
   });
+}
+
+function getCachedRefinedQrCodes_() {
+  const cached = CacheService.getScriptCache().get(CACHE_KEYS.refinedQrCodes);
+
+  if (!cached) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(cached);
+  } catch (error) {
+    return null;
+  }
+}
+
+function cacheRefinedQrCodes_(codes) {
+  const payload = JSON.stringify(codes);
+
+  if (payload.length > 90000) {
+    return;
+  }
+
+  CacheService
+    .getScriptCache()
+    .put(CACHE_KEYS.refinedQrCodes, payload, CACHE_TTL_SECONDS);
 }
 
 function cleanCandidateCode_(value) {
@@ -435,6 +488,7 @@ function getDataSheet_() {
 function ensureDataHeaders_(sheet) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(DATA_HEADERS);
+    CacheService.getScriptCache().remove(CACHE_KEYS.dataHeaderMap);
     return;
   }
 
@@ -450,42 +504,122 @@ function appendMappedRow_(sheet, valuesByHeader) {
 
 function getNextWritableRow_(sheet, columnMap) {
   const maxRows = sheet.getMaxRows();
-  let lastWritableRow = 1;
+  const timestampColumn = columnMap[DATA_COLUMNS.timestamp];
+  const columnValues = sheet
+    .getRange(2, timestampColumn, Math.max(maxRows - 1, 1), 1)
+    .getValues();
 
-  DATA_HEADERS.forEach(function(header) {
-    if (FORMULA_MANAGED_DATA_HEADERS.indexOf(header) !== -1) {
-      return;
+  for (let index = columnValues.length - 1; index >= 0; index -= 1) {
+    if (String(columnValues[index][0] || '').trim()) {
+      return index + 3;
     }
+  }
 
-    const columnValues = sheet
-      .getRange(2, columnMap[header], Math.max(maxRows - 1, 1), 1)
-      .getValues();
-
-    for (let index = columnValues.length - 1; index >= 0; index -= 1) {
-      if (String(columnValues[index][0] || '').trim()) {
-        lastWritableRow = Math.max(lastWritableRow, index + 2);
-        return;
-      }
-    }
-  });
-
-  return lastWritableRow + 1;
+  return 2;
 }
 
 function writeMappedRows_(sheet, startRow, rowsByHeader, columnMap) {
   const resolvedColumnMap = columnMap || getHeaderMap_(sheet);
+  const writableHeaders = DATA_HEADERS
+    .filter(function(header) {
+      return FORMULA_MANAGED_DATA_HEADERS.indexOf(header) === -1;
+    })
+    .sort(function(left, right) {
+      return resolvedColumnMap[left] - resolvedColumnMap[right];
+    });
+  const groups = [];
 
-  DATA_HEADERS.forEach(function(header) {
-    if (FORMULA_MANAGED_DATA_HEADERS.indexOf(header) !== -1) {
+  writableHeaders.forEach(function(header) {
+    const column = resolvedColumnMap[header];
+    const previousGroup = groups[groups.length - 1];
+
+    if (previousGroup && previousGroup.startColumn + previousGroup.headers.length === column) {
+      previousGroup.headers.push(header);
       return;
     }
 
+    groups.push({
+      startColumn: column,
+      headers: [header],
+    });
+  });
+
+  groups.forEach(function(group) {
     const values = rowsByHeader.map(function(valuesByHeader) {
-      return [valuesByHeader[header] || ''];
+      return group.headers.map(function(header) {
+        return valuesByHeader[header] || '';
+      });
     });
 
-    sheet.getRange(startRow, resolvedColumnMap[header], values.length, 1).setValues(values);
+    sheet.getRange(startRow, group.startColumn, values.length, group.headers.length).setValues(values);
   });
+}
+
+function getHeaderMap_(sheet) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CACHE_KEYS.dataHeaderMap);
+
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      cache.remove(CACHE_KEYS.dataHeaderMap);
+    }
+  }
+
+  const lastColumn = sheet.getLastColumn();
+  const headers = lastColumn
+    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    : [];
+  const map = {};
+  let headerWasAdded = false;
+
+  headers.forEach(function(header, index) {
+    const normalized = String(header || '').trim();
+    if (normalized) {
+      map[normalized] = index + 1;
+    }
+  });
+
+  DATA_HEADERS.forEach(function(header, index) {
+    if (!map[header]) {
+      const nextColumn = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextColumn).setValue(header);
+      map[header] = nextColumn;
+      headerWasAdded = true;
+    }
+  });
+
+  if (!headerWasAdded) {
+    cache.put(CACHE_KEYS.dataHeaderMap, JSON.stringify(map), CACHE_TTL_SECONDS);
+  }
+
+  return map;
+}
+
+function getAttendanceListSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_SCHEMA.attendanceList.sheetName);
+
+  if (!sheet) {
+    throw new Error('找不到名稱為「' + SHEET_SCHEMA.attendanceList.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
+  }
+
+  return sheet;
+}
+
+function validateApiKey_(providedKey) {
+  const expectedKey = PropertiesService.getScriptProperties().getProperty(OPTIONAL_API_KEY_PROPERTY);
+
+  if (expectedKey && providedKey !== expectedKey) {
+    throw new Error('Invalid scanner API key.');
+  }
+}
+
+function jsonResponse_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function keepDataColumns_(sheet) {
@@ -517,54 +651,4 @@ function trimDataSheetColumns_(sheet) {
   } else if (maxColumns < desiredColumns) {
     sheet.insertColumnsAfter(maxColumns, desiredColumns - maxColumns);
   }
-}
-
-function getHeaderMap_(sheet) {
-  const lastColumn = sheet.getLastColumn();
-  const headers = lastColumn
-    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
-    : [];
-  const map = {};
-
-  headers.forEach(function(header, index) {
-    const normalized = String(header || '').trim();
-    if (normalized) {
-      map[normalized] = index + 1;
-    }
-  });
-
-  DATA_HEADERS.forEach(function(header, index) {
-    if (!map[header]) {
-      const nextColumn = sheet.getLastColumn() + 1;
-      sheet.getRange(1, nextColumn).setValue(header);
-      map[header] = nextColumn;
-    }
-  });
-
-  return map;
-}
-
-function getAttendanceListSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(SHEET_SCHEMA.attendanceList.sheetName);
-
-  if (!sheet) {
-    throw new Error('找不到名稱為「' + SHEET_SCHEMA.attendanceList.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
-  }
-
-  return sheet;
-}
-
-function validateApiKey_(providedKey) {
-  const expectedKey = PropertiesService.getScriptProperties().getProperty(OPTIONAL_API_KEY_PROPERTY);
-
-  if (expectedKey && providedKey !== expectedKey) {
-    throw new Error('Invalid scanner API key.');
-  }
-}
-
-function jsonResponse_(payload) {
-  return ContentService
-    .createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
 }

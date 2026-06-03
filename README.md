@@ -25,6 +25,9 @@ column but does not write values into it.
 Manual code entry is validated against the `Refined_QRcode` column in `Student Info`
 before the code is written to `Data`.
 
+The Apps Script caches `Refined_QRcode` values and `Data` headers briefly to
+reduce confirmation latency during scanning.
+
 From `backend/`, use clasp:
 
 ```sh
