@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pyramid Challenge QR Scanner</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="./config.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="icon-button" id="back-button" type="button" aria-label="返回">←</button>
+    <h1>Pyramid Challenge QR Scanner</h1>
+  </header>
+
+  <main class="app-main">
+    <section class="location-view" id="location-view">
+      <h2>你現時處於：</h2>
+      <div class="location-actions">
+        <button class="primary-button" type="button" data-location="登記處">登記處</button>
+        <button class="primary-button" type="button" data-location="考場門口">考場門口</button>
+      </div>
+    </section>
+
+    <section class="scanner-view" id="scanner-view" hidden>
+      <p class="current-location" id="current-location"></p>
+      <div id="qr-reader"></div>
+      <p class="error-message" id="scanner-error" hidden></p>
+    </section>
+
+    <section class="dialog" id="confirm-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="dialog-body">
+        <p class="decoded-text" id="decoded-text"></p>
+        <input type="text" id="remark" placeholder="請輸入備註" aria-label="備註">
+        <p class="error-message" id="error-message" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="cancel-button" type="button">取消</button>
+        <button class="primary-button" id="confirm-button" type="button">確認</button>
+      </div>
+    </section>
+
+    <div class="status" id="status" role="status" hidden></div>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
