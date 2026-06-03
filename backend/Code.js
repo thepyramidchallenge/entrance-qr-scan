@@ -1,16 +1,38 @@
-const SHEET_NAME = 'Data';
-const ATTENDANCE_LIST_SHEET_NAME = 'Attendance list';
-const QR_CODE_LOOKUP_SHEET_NAME = 'Student info';
-const QR_CODE_LOOKUP_HEADER = 'QRcode';
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v2';
+const API_VERSION = '2026-06-03-data-schema-v3';
+const SHEET_SCHEMA = {
+  data: {
+    sheetName: 'Data',
+    columns: {
+      timestamp: 'Timestamp',
+      fullData: 'Full data',
+      qrCodeData: 'QRcode data',
+      name: 'Name',
+      remark: 'Remark',
+    },
+  },
+  studentInfo: {
+    sheetName: 'Student info',
+    columns: {
+      qrCode: 'QRcode',
+    },
+  },
+  attendanceList: {
+    sheetName: 'Attendance list',
+    columns: {
+      qrCode: 'QRcode',
+    },
+  },
+};
+const DATA_COLUMNS = SHEET_SCHEMA.data.columns;
+const STUDENT_INFO_COLUMNS = SHEET_SCHEMA.studentInfo.columns;
 const DATA_HEADERS = [
-  'Timestamp',
-  'Full data',
-  'QRcode data',
-  'Name',
-  'Remark',
+  DATA_COLUMNS.timestamp,
+  DATA_COLUMNS.fullData,
+  DATA_COLUMNS.qrCodeData,
+  DATA_COLUMNS.name,
+  DATA_COLUMNS.remark,
 ];
 
 function doGet(e) {
@@ -29,7 +51,7 @@ function doGet(e) {
     service: 'Pyramid Challenge QR Scanner API',
     version: API_VERSION,
     spreadsheetId: SPREADSHEET_ID,
-    sheetName: SHEET_NAME,
+    sheetName: SHEET_SCHEMA.data.sheetName,
   });
 }
 
@@ -69,11 +91,11 @@ function recordData(decodedText, remark) {
 
     const student = parseStudentInfo_(decodedText);
     appendMappedRow_(sheet, {
-      'Timestamp': new Date(),
-      'Full data': String(decodedText || '').trim(),
-      'QRcode data': student.qrCodeData,
-      'Name': student.name,
-      'Remark': remark || '',
+      [DATA_COLUMNS.timestamp]: new Date(),
+      [DATA_COLUMNS.fullData]: String(decodedText || '').trim(),
+      [DATA_COLUMNS.qrCodeData]: student.qrCodeData,
+      [DATA_COLUMNS.name]: student.name,
+      [DATA_COLUMNS.remark]: remark || '',
     });
   } catch (error) {
     Logger.log('Error recording data: ' + error.message);
@@ -95,11 +117,11 @@ function recordManualCode(manualCode) {
   const sheet = getDataSheet_();
   ensureDataHeaders_(sheet);
   appendMappedRow_(sheet, {
-    'Timestamp': new Date(),
-    'Full data': code,
-    'QRcode data': code,
-    'Name': 'NA',
-    'Remark': '',
+    [DATA_COLUMNS.timestamp]: new Date(),
+    [DATA_COLUMNS.fullData]: code,
+    [DATA_COLUMNS.qrCodeData]: code,
+    [DATA_COLUMNS.name]: 'NA',
+    [DATA_COLUMNS.remark]: '',
   });
 }
 
@@ -177,7 +199,7 @@ function handleJsonpRecord_(params) {
 function isValidManualCode_(manualCode) {
   const code = String(manualCode || '').trim();
   const sheet = getQrCodeLookupSheet_();
-  const qrCodeColumn = getHeaderColumnIndex_(sheet, QR_CODE_LOOKUP_HEADER);
+  const qrCodeColumn = getHeaderColumnIndex_(sheet, STUDENT_INFO_COLUMNS.qrCode);
   const lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
@@ -193,10 +215,10 @@ function isValidManualCode_(manualCode) {
 
 function getQrCodeLookupSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(QR_CODE_LOOKUP_SHEET_NAME);
+  const sheet = ss.getSheetByName(SHEET_SCHEMA.studentInfo.sheetName);
 
   if (!sheet) {
-    throw new Error('找不到名稱為「' + QR_CODE_LOOKUP_SHEET_NAME + '」的工作表，請檢查試算表內的分頁名稱。');
+    throw new Error('找不到名稱為「' + SHEET_SCHEMA.studentInfo.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
   }
 
   return sheet;
@@ -229,11 +251,11 @@ function migrateDataSheetColumns() {
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
-    const timestamp = getMappedRowValue_(row, headerMap, ['Timestamp']);
-    const fullData = getMappedRowValue_(row, headerMap, ['Full data', 'Decoded QR text']) || getMappedRowValue_(row, headerMap, ['QRcode data', 'Candidate Code']);
+    const timestamp = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.timestamp]);
+    const fullData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.fullData, 'Decoded QR text']) || getMappedRowValue_(row, headerMap, [DATA_COLUMNS.qrCodeData, 'Candidate Code']);
     const parsed = parseStudentInfo_(fullData);
-    const existingName = getMappedRowValue_(row, headerMap, ['Name']);
-    const remark = getMappedRowValue_(row, headerMap, ['Remark']);
+    const existingName = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.name]);
+    const remark = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.remark]);
 
     if (!timestamp && !fullData && !existingName && !remark) {
       continue;
@@ -260,7 +282,7 @@ function migrateDataSheetColumns() {
   return {
     ok: true,
     headers: DATA_HEADERS,
-    sheetName: SHEET_NAME,
+    sheetName: SHEET_SCHEMA.data.sheetName,
     spreadsheetId: SPREADSHEET_ID,
   };
 }
@@ -291,10 +313,10 @@ function getMappedRowValue_(row, headerMap, headers) {
 
 function getDataSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(SHEET_NAME);
+  const sheet = ss.getSheetByName(SHEET_SCHEMA.data.sheetName);
 
   if (!sheet) {
-    throw new Error('找不到名稱為「' + SHEET_NAME + '」的工作表，請檢查試算表內的分頁名稱。');
+    throw new Error('找不到名稱為「' + SHEET_SCHEMA.data.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
   }
 
   return sheet;
@@ -379,10 +401,10 @@ function getHeaderMap_(sheet) {
 
 function getAttendanceListSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(ATTENDANCE_LIST_SHEET_NAME);
+  const sheet = ss.getSheetByName(SHEET_SCHEMA.attendanceList.sheetName);
 
   if (!sheet) {
-    throw new Error('找不到名稱為「' + ATTENDANCE_LIST_SHEET_NAME + '」的工作表，請檢查試算表內的分頁名稱。');
+    throw new Error('找不到名稱為「' + SHEET_SCHEMA.attendanceList.sheetName + '」的工作表，請檢查試算表內的分頁名稱。');
   }
 
   return sheet;
