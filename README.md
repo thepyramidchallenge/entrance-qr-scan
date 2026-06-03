@@ -29,7 +29,7 @@ After deployment, copy the Apps Script Web App URL into `frontend/config.js`.
 Current Web App URL:
 
 ```text
-https://script.google.com/macros/s/AKfycbwOM1Aqk2PtEKQ6uyQJeJzosmfPwYMspzrzuzbvW5uIhszCG-ekJbutibRvtJRzpozvAQ/exec
+https://script.google.com/macros/s/AKfycbwpImYsJwBTIncEH3T4y9qx-GKKdxUUlq873LJxBFXkpF_srfiPGHLZE9w8_wwiARc/exec
 ```
 
 Optional: set the script property `SCANNER_API_KEY`. If it is set, the frontend must send the same `API_KEY` in `frontend/config.js`.
