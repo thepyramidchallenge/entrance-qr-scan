@@ -17,6 +17,19 @@ const SHEET_SCHEMA = {
     columns: {
       qrCode: 'QRcode',
     },
+    columnAliases: {
+      qrCode: [
+        'QRcode',
+        'QR code',
+        'QR Code',
+        'QRCode',
+        'QRcode data',
+        'QR Code data',
+        'Candidate Code',
+        'Student Code',
+        '考生編號',
+      ],
+    },
   },
   attendanceList: {
     sheetName: 'Attendance list',
@@ -26,7 +39,6 @@ const SHEET_SCHEMA = {
   },
 };
 const DATA_COLUMNS = SHEET_SCHEMA.data.columns;
-const STUDENT_INFO_COLUMNS = SHEET_SCHEMA.studentInfo.columns;
 const DATA_HEADERS = [
   DATA_COLUMNS.timestamp,
   DATA_COLUMNS.fullData,
@@ -199,11 +211,15 @@ function handleJsonpRecord_(params) {
 function isValidManualCode_(manualCode) {
   const code = String(manualCode || '').trim();
   const sheet = getQrCodeLookupSheet_();
-  const qrCodeColumn = getHeaderColumnIndex_(sheet, STUDENT_INFO_COLUMNS.qrCode);
+  const qrCodeColumn = getHeaderColumnIndex_(sheet, SHEET_SCHEMA.studentInfo.columnAliases.qrCode, false);
   const lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
     return false;
+  }
+
+  if (!qrCodeColumn) {
+    return sheetContainsExactValue_(sheet, code);
   }
 
   const values = sheet.getRange(2, qrCodeColumn, lastRow - 1, 1).getValues();
@@ -224,23 +240,57 @@ function getQrCodeLookupSheet_() {
   return sheet;
 }
 
-function getHeaderColumnIndex_(sheet, headerName) {
+function getHeaderColumnIndex_(sheet, headerNames, shouldThrow) {
   const lastColumn = sheet.getLastColumn();
+  const candidates = Array.isArray(headerNames) ? headerNames : [headerNames];
 
   if (lastColumn < 1) {
-    throw new Error('找不到「' + headerName + '」欄。');
+    if (shouldThrow === false) {
+      return 0;
+    }
+    throw new Error('找不到「' + candidates[0] + '」欄。');
   }
 
   const headerValues = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const headerIndex = headerValues.findIndex(function(header) {
-    return String(header || '').trim() === headerName;
+    return candidates.some(function(candidate) {
+      return normalizeHeader_(header) === normalizeHeader_(candidate);
+    });
   });
 
   if (headerIndex === -1) {
-    throw new Error('找不到「' + headerName + '」欄。');
+    if (shouldThrow === false) {
+      return 0;
+    }
+    throw new Error('找不到「' + candidates[0] + '」欄。');
   }
 
   return headerIndex + 1;
+}
+
+function sheetContainsExactValue_(sheet, value) {
+  const normalizedValue = String(value || '').trim();
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (!normalizedValue || lastRow < 2 || lastColumn < 1) {
+    return false;
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+
+  return values.some(function(row) {
+    return row.some(function(cell) {
+      return String(cell || '').trim() === normalizedValue;
+    });
+  });
+}
+
+function normalizeHeader_(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
 }
 
 function migrateDataSheetColumns() {
