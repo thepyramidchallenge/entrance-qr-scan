@@ -11,6 +11,7 @@ const confirmButton = document.getElementById('confirm-button');
 const manualCodeButton = document.getElementById('manual-code-button');
 const manualDialog = document.getElementById('manual-dialog');
 const manualCodeInput = document.getElementById('manual-code');
+const manualRemarkInput = document.getElementById('manual-remark');
 const manualDialogError = document.getElementById('manual-error-message');
 const manualCancelButton = document.getElementById('manual-cancel-button');
 const manualConfirmButton = document.getElementById('manual-confirm-button');
@@ -20,6 +21,7 @@ let isProcessing = false;
 let html5QrCode = null;
 let isScannerStarting = false;
 let scannerStartPromise = null;
+let statusTimer = null;
 
 cancelButton.addEventListener('click', cancelScan);
 confirmButton.addEventListener('click', confirmScan);
@@ -122,8 +124,8 @@ async function confirmScan() {
     dialogBackdrop.hidden = true;
     remarkInput.value = '';
     lastDecodedText = '';
-    setStatus('已記錄，正在重新啟動掃描...');
     startScanning();
+    setStatus('已成功登記🌟', 5000);
   } catch (error) {
     setError(error.message || '錄入資料失敗，請重試。');
     setStatus('');
@@ -142,6 +144,7 @@ async function openManualDialog() {
   manualDialog.hidden = false;
   dialogBackdrop.hidden = false;
   manualCodeInput.value = '';
+  manualRemarkInput.value = '';
   setManualError('');
   setStatus('');
   manualCodeInput.focus();
@@ -151,6 +154,7 @@ function closeManualDialog() {
   manualDialog.hidden = true;
   dialogBackdrop.hidden = true;
   manualCodeInput.value = '';
+  manualRemarkInput.value = '';
   setManualError('');
   startScanning();
 }
@@ -179,6 +183,7 @@ async function confirmManualCode() {
   try {
     const result = await recordManualCodeWithJsonp({
       manualCode,
+      remark: manualRemarkInput.value,
       key: config.API_KEY || '',
     });
 
@@ -189,8 +194,9 @@ async function confirmManualCode() {
     manualDialog.hidden = true;
     dialogBackdrop.hidden = true;
     manualCodeInput.value = '';
+    manualRemarkInput.value = '';
     startScanning();
-    setStatus(result.message || '已成功紀錄');
+    setStatus(result.message || '已成功登記🌟', 5000);
   } catch (error) {
     setManualError(error.message || '你輸入的考生編號格式錯誤');
     setStatus('');
@@ -250,9 +256,20 @@ function setManualButtonsDisabled(disabled) {
   manualCancelButton.disabled = disabled;
 }
 
-function setStatus(message) {
+function setStatus(message, durationMs) {
+  if (statusTimer) {
+    window.clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+
   statusMessage.textContent = message;
   statusMessage.hidden = !message;
+
+  if (message && durationMs) {
+    statusTimer = window.setTimeout(() => {
+      setStatus('');
+    }, durationMs);
+  }
 }
 
 function setError(message) {

@@ -13,9 +13,11 @@ The backend writes rows to the `Data` sheet in this order:
 
 1. Timestamp
 2. Full data
-3. QRcode data
+3. Scanned data
 4. Name
 5. Remark
+6. Final_QRCode
+7. Manual input data
 
 Manual code entry is validated against the `QRcode` column in `Student info`
 before the code is written to `Data`.

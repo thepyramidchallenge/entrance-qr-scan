@@ -1,15 +1,17 @@
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v3';
+const API_VERSION = '2026-06-03-data-schema-v4';
 const SHEET_SCHEMA = {
   data: {
     sheetName: 'Data',
     columns: {
       timestamp: 'Timestamp',
       fullData: 'Full data',
-      qrCodeData: 'QRcode data',
+      scannedData: 'Scanned data',
       name: 'Name',
       remark: 'Remark',
+      finalQRCode: 'Final_QRCode',
+      manualInputData: 'Manual input data',
     },
   },
   studentInfo: {
@@ -42,9 +44,11 @@ const DATA_COLUMNS = SHEET_SCHEMA.data.columns;
 const DATA_HEADERS = [
   DATA_COLUMNS.timestamp,
   DATA_COLUMNS.fullData,
-  DATA_COLUMNS.qrCodeData,
+  DATA_COLUMNS.scannedData,
   DATA_COLUMNS.name,
   DATA_COLUMNS.remark,
+  DATA_COLUMNS.finalQRCode,
+  DATA_COLUMNS.manualInputData,
 ];
 
 function doGet(e) {
@@ -72,14 +76,14 @@ function doPost(e) {
     const data = parseRequest_(e);
     validateApiKey_(data.key);
     if (data.manualCode) {
-      recordManualCode(data.manualCode);
+      recordManualCode(data.manualCode, data.remark);
     } else {
       recordData(data.decodedText, data.remark);
     }
 
     return jsonResponse_({
       ok: true,
-      message: data.manualCode ? '已成功紀錄' : 'Recorded',
+      message: data.manualCode ? '已成功登記🌟' : '已成功登記🌟',
       version: API_VERSION,
     });
   } catch (error) {
@@ -105,9 +109,11 @@ function recordData(decodedText, remark) {
     appendMappedRow_(sheet, {
       [DATA_COLUMNS.timestamp]: new Date(),
       [DATA_COLUMNS.fullData]: String(decodedText || '').trim(),
-      [DATA_COLUMNS.qrCodeData]: student.qrCodeData,
+      [DATA_COLUMNS.scannedData]: student.scannedData,
       [DATA_COLUMNS.name]: student.name,
       [DATA_COLUMNS.remark]: remark || '',
+      [DATA_COLUMNS.finalQRCode]: student.scannedData,
+      [DATA_COLUMNS.manualInputData]: '',
     });
   } catch (error) {
     Logger.log('Error recording data: ' + error.message);
@@ -115,7 +121,7 @@ function recordData(decodedText, remark) {
   }
 }
 
-function recordManualCode(manualCode) {
+function recordManualCode(manualCode, remark) {
   const code = String(manualCode || '').trim();
 
   if (!code) {
@@ -131,9 +137,11 @@ function recordManualCode(manualCode) {
   appendMappedRow_(sheet, {
     [DATA_COLUMNS.timestamp]: new Date(),
     [DATA_COLUMNS.fullData]: code,
-    [DATA_COLUMNS.qrCodeData]: code,
+    [DATA_COLUMNS.scannedData]: '',
     [DATA_COLUMNS.name]: 'NA',
-    [DATA_COLUMNS.remark]: '',
+    [DATA_COLUMNS.remark]: remark || '',
+    [DATA_COLUMNS.finalQRCode]: code,
+    [DATA_COLUMNS.manualInputData]: code,
   });
 }
 
@@ -143,13 +151,13 @@ function parseStudentInfo_(decodedText) {
 
   if (!match) {
     return {
-      qrCodeData: text,
+      scannedData: text,
       name: 'NA',
     };
   }
 
   return {
-    qrCodeData: match[1],
+    scannedData: match[1],
     name: String(match[2] || '').trim() || 'NA',
   };
 }
@@ -174,9 +182,9 @@ function handleJsonpManualRecord_(params) {
 
   try {
     validateApiKey_(params.key);
-    recordManualCode(params.manualCode);
+    recordManualCode(params.manualCode, params.remark);
     response.ok = true;
-    response.message = '已成功紀錄';
+    response.message = '已成功登記🌟';
     response.version = API_VERSION;
   } catch (error) {
     response.ok = false;
@@ -302,21 +310,28 @@ function migrateDataSheetColumns() {
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
     const timestamp = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.timestamp]);
-    const fullData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.fullData, 'Decoded QR text']) || getMappedRowValue_(row, headerMap, [DATA_COLUMNS.qrCodeData, 'Candidate Code']);
+    const fullData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.fullData, 'Decoded QR text']) || getMappedRowValue_(row, headerMap, [DATA_COLUMNS.scannedData, 'QRcode data', 'Candidate Code']);
     const parsed = parseStudentInfo_(fullData);
     const existingName = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.name]);
     const remark = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.remark]);
+    const scannedData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.scannedData, 'QRcode data']);
+    const finalQRCode = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.finalQRCode]);
+    const manualInputData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.manualInputData]);
 
-    if (!timestamp && !fullData && !existingName && !remark) {
+    if (!timestamp && !fullData && !existingName && !remark && !scannedData && !finalQRCode && !manualInputData) {
       continue;
     }
+
+    const migratedScannedData = scannedData || parsed.scannedData || fullData || '';
 
     migratedRows.push([
       timestamp || '',
       fullData || '',
-      parsed.qrCodeData || fullData || '',
+      migratedScannedData,
       parsed.name !== 'NA' ? parsed.name : (existingName || 'NA'),
       remark || '',
+      finalQRCode || manualInputData || migratedScannedData,
+      manualInputData || '',
     ]);
   }
 
