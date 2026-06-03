@@ -22,6 +22,7 @@ let html5QrCode = null;
 let isScannerStarting = false;
 let scannerStartPromise = null;
 let statusTimer = null;
+let buttonLoadingTimer = null;
 
 cancelButton.addEventListener('click', cancelScan);
 confirmButton.addEventListener('click', confirmScan);
@@ -106,6 +107,7 @@ async function confirmScan() {
 
   isProcessing = true;
   setButtonsDisabled(true);
+  setButtonLoading(confirmButton, true);
   setStatus('正在處理...');
   setError('');
 
@@ -131,6 +133,7 @@ async function confirmScan() {
     setStatus('');
   } finally {
     isProcessing = false;
+    setButtonLoading(confirmButton, false);
     setButtonsDisabled(false);
   }
 }
@@ -177,6 +180,7 @@ async function confirmManualCode() {
 
   isProcessing = true;
   setManualButtonsDisabled(true);
+  setButtonLoading(manualConfirmButton, true);
   setStatus('正在處理...');
   setManualError('');
 
@@ -202,6 +206,7 @@ async function confirmManualCode() {
     setStatus('');
   } finally {
     isProcessing = false;
+    setButtonLoading(manualConfirmButton, false);
     setManualButtonsDisabled(false);
   }
 }
@@ -254,6 +259,31 @@ function setButtonsDisabled(disabled) {
 function setManualButtonsDisabled(disabled) {
   manualConfirmButton.disabled = disabled;
   manualCancelButton.disabled = disabled;
+}
+
+function setButtonLoading(button, isLoading) {
+  if (buttonLoadingTimer) {
+    window.clearInterval(buttonLoadingTimer);
+    buttonLoadingTimer = null;
+  }
+
+  if (!button.dataset.originalText) {
+    button.dataset.originalText = button.textContent;
+  }
+
+  if (!isLoading) {
+    button.textContent = button.dataset.originalText;
+    button.classList.remove('is-loading');
+    return;
+  }
+
+  let dotCount = 1;
+  button.classList.add('is-loading');
+  button.textContent = '.';
+  buttonLoadingTimer = window.setInterval(() => {
+    dotCount = dotCount === 3 ? 1 : dotCount + 1;
+    button.textContent = '.'.repeat(dotCount);
+  }, 320);
 }
 
 function setStatus(message, durationMs) {

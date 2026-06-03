@@ -94,6 +94,12 @@ button:disabled {
   opacity: 0.65;
 }
 
+button.is-loading {
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
 .primary-button,
 .secondary-button {
   flex: 1;
