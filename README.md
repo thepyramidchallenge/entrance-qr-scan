@@ -19,6 +19,9 @@ The backend writes rows to the `Data` sheet in this order:
 6. Final_QRCode
 7. Manual input data
 
+`Final_QRCode` is managed by a Google Sheets formula. The Apps Script keeps the
+column but does not write values into it.
+
 Manual code entry is validated against the `Refined_QRcode` column in `Student Info`
 before the code is written to `Data`.
 

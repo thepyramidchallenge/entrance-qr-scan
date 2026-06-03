@@ -1,6 +1,6 @@
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-data-schema-v5';
+const API_VERSION = '2026-06-03-data-schema-v6';
 const SHEET_SCHEMA = {
   data: {
     sheetName: 'Data',
@@ -48,6 +48,9 @@ const DATA_HEADERS = [
   DATA_COLUMNS.remark,
   DATA_COLUMNS.finalQRCode,
   DATA_COLUMNS.manualInputData,
+];
+const FORMULA_MANAGED_DATA_HEADERS = [
+  DATA_COLUMNS.finalQRCode,
 ];
 
 function doGet(e) {
@@ -111,7 +114,6 @@ function recordData(decodedText, remark) {
       [DATA_COLUMNS.scannedData]: student.scannedData,
       [DATA_COLUMNS.name]: student.name,
       [DATA_COLUMNS.remark]: remark || '',
-      [DATA_COLUMNS.finalQRCode]: student.scannedData,
       [DATA_COLUMNS.manualInputData]: '',
     });
   } catch (error) {
@@ -139,7 +141,6 @@ function recordManualCode(manualCode, remark) {
     [DATA_COLUMNS.scannedData]: '',
     [DATA_COLUMNS.name]: 'NA',
     [DATA_COLUMNS.remark]: remark || '',
-    [DATA_COLUMNS.finalQRCode]: code,
     [DATA_COLUMNS.manualInputData]: code,
   });
 }
@@ -293,6 +294,7 @@ function migrateDataSheetColumns() {
   const sheet = getDataSheet_();
   const rows = sheet.getDataRange().getValues();
   const headerMap = rows.length ? buildHeaderMapFromValues_(rows[0]) : {};
+  const formulaManagedFormulas = getFormulaManagedColumnFormulas_(sheet, headerMap);
   const migratedRows = [];
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
@@ -303,31 +305,30 @@ function migrateDataSheetColumns() {
     const existingName = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.name]);
     const remark = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.remark]);
     const scannedData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.scannedData, 'QRcode data']);
-    const finalQRCode = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.finalQRCode]);
     const manualInputData = getMappedRowValue_(row, headerMap, [DATA_COLUMNS.manualInputData]);
 
-    if (!timestamp && !fullData && !existingName && !remark && !scannedData && !finalQRCode && !manualInputData) {
+    if (!timestamp && !fullData && !existingName && !remark && !scannedData && !manualInputData) {
       continue;
     }
 
     const migratedScannedData = scannedData || parsed.scannedData || fullData || '';
 
-    migratedRows.push([
-      timestamp || '',
-      fullData || '',
-      migratedScannedData,
-      parsed.name !== 'NA' ? parsed.name : (existingName || 'NA'),
-      remark || '',
-      finalQRCode || manualInputData || migratedScannedData,
-      manualInputData || '',
-    ]);
+    migratedRows.push({
+      [DATA_COLUMNS.timestamp]: timestamp || '',
+      [DATA_COLUMNS.fullData]: fullData || '',
+      [DATA_COLUMNS.scannedData]: migratedScannedData,
+      [DATA_COLUMNS.name]: parsed.name !== 'NA' ? parsed.name : (existingName || 'NA'),
+      [DATA_COLUMNS.remark]: remark || '',
+      [DATA_COLUMNS.manualInputData]: manualInputData || '',
+    });
   }
 
   sheet.clear();
   sheet.getRange(1, 1, 1, DATA_HEADERS.length).setValues([DATA_HEADERS]);
+  restoreFormulaManagedColumnFormulas_(sheet, formulaManagedFormulas);
 
   if (migratedRows.length) {
-    sheet.getRange(2, 1, migratedRows.length, DATA_HEADERS.length).setValues(migratedRows);
+    writeMappedRows_(sheet, 2, migratedRows);
   }
 
   trimDataSheetColumns_(sheet);
@@ -364,6 +365,41 @@ function getMappedRowValue_(row, headerMap, headers) {
   return '';
 }
 
+function getFormulaManagedColumnFormulas_(sheet, headerMap) {
+  const formulasByHeader = {};
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return formulasByHeader;
+  }
+
+  FORMULA_MANAGED_DATA_HEADERS.forEach(function(header) {
+    if (headerMap[header] === undefined) {
+      return;
+    }
+
+    formulasByHeader[header] = sheet
+      .getRange(2, headerMap[header] + 1, lastRow - 1, 1)
+      .getFormulas();
+  });
+
+  return formulasByHeader;
+}
+
+function restoreFormulaManagedColumnFormulas_(sheet, formulasByHeader) {
+  const columnMap = getHeaderMap_(sheet);
+
+  FORMULA_MANAGED_DATA_HEADERS.forEach(function(header) {
+    const formulas = formulasByHeader[header];
+
+    if (!formulas || !formulas.length) {
+      return;
+    }
+
+    sheet.getRange(2, columnMap[header], formulas.length, 1).setFormulas(formulas);
+  });
+}
+
 function getDataSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_SCHEMA.data.sheetName);
@@ -386,14 +422,49 @@ function ensureDataHeaders_(sheet) {
 
 function appendMappedRow_(sheet, valuesByHeader) {
   const columnMap = getHeaderMap_(sheet);
-  const lastColumn = sheet.getLastColumn();
-  const row = new Array(lastColumn).fill('');
+  const nextRow = getNextWritableRow_(sheet, columnMap);
+
+  writeMappedRows_(sheet, nextRow, [valuesByHeader], columnMap);
+}
+
+function getNextWritableRow_(sheet, columnMap) {
+  const maxRows = sheet.getMaxRows();
+  let lastWritableRow = 1;
 
   DATA_HEADERS.forEach(function(header) {
-    row[columnMap[header] - 1] = valuesByHeader[header] || '';
+    if (FORMULA_MANAGED_DATA_HEADERS.indexOf(header) !== -1) {
+      return;
+    }
+
+    const columnValues = sheet
+      .getRange(2, columnMap[header], Math.max(maxRows - 1, 1), 1)
+      .getValues();
+
+    for (let index = columnValues.length - 1; index >= 0; index -= 1) {
+      if (String(columnValues[index][0] || '').trim()) {
+        lastWritableRow = Math.max(lastWritableRow, index + 2);
+        return;
+      }
+    }
   });
 
-  sheet.appendRow(row);
+  return lastWritableRow + 1;
+}
+
+function writeMappedRows_(sheet, startRow, rowsByHeader, columnMap) {
+  const resolvedColumnMap = columnMap || getHeaderMap_(sheet);
+
+  DATA_HEADERS.forEach(function(header) {
+    if (FORMULA_MANAGED_DATA_HEADERS.indexOf(header) !== -1) {
+      return;
+    }
+
+    const values = rowsByHeader.map(function(valuesByHeader) {
+      return [valuesByHeader[header] || ''];
+    });
+
+    sheet.getRange(startRow, resolvedColumnMap[header], values.length, 1).setValues(values);
+  });
 }
 
 function keepDataColumns_(sheet) {
