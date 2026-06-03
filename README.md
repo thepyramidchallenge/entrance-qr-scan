@@ -12,14 +12,12 @@ This repo separates the scanner frontend from the Google Apps Script backend.
 The backend writes rows to the `Data` sheet in this order:
 
 1. Timestamp
-2. Decoded QR text
-3. Candidate Code
-4. Class
-5. Session
-6. Name
-7. Remark
+2. Full data
+3. QRcode data
+4. Name
+5. Remark
 
-Manual code entry is validated against the `QRcode` column in `工作表7`
+Manual code entry is validated against the `QRcode` column in `Student info`
 before the code is written to `Data`.
 
 From `backend/`, use clasp:

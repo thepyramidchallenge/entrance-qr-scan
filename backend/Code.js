@@ -1,15 +1,14 @@
 const SHEET_NAME = 'Data';
-const QR_CODE_LOOKUP_SHEET_NAME = '工作表7';
+const ATTENDANCE_LIST_SHEET_NAME = 'Attendance list';
+const QR_CODE_LOOKUP_SHEET_NAME = 'Student info';
 const QR_CODE_LOOKUP_HEADER = 'QRcode';
 const SPREADSHEET_ID = '1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck';
 const OPTIONAL_API_KEY_PROPERTY = 'SCANNER_API_KEY';
-const API_VERSION = '2026-06-03-manual-validation';
+const API_VERSION = '2026-06-03-data-schema-v2';
 const DATA_HEADERS = [
   'Timestamp',
-  'Decoded QR text',
-  'Candidate Code',
-  'Class',
-  'Session',
+  'Full data',
+  'QRcode data',
   'Name',
   'Remark',
 ];
@@ -66,18 +65,16 @@ function recordData(decodedText, remark) {
     }
 
     const sheet = getDataSheet_();
-    ensureHeaderRowIfEmpty_(sheet);
+    ensureDataHeaders_(sheet);
 
     const student = parseStudentInfo_(decodedText);
-    sheet.appendRow([
-      new Date(),
-      decodedText,
-      student.code,
-      student.className,
-      student.session,
-      student.name,
-      remark || '',
-    ]);
+    appendMappedRow_(sheet, {
+      'Timestamp': new Date(),
+      'Full data': String(decodedText || '').trim(),
+      'QRcode data': student.qrCodeData,
+      'Name': student.name,
+      'Remark': remark || '',
+    });
   } catch (error) {
     Logger.log('Error recording data: ' + error.message);
     throw error;
@@ -95,27 +92,31 @@ function recordManualCode(manualCode) {
     throw new Error('你輸入的考生編號格式錯誤');
   }
 
-  recordData(code, '');
+  const sheet = getDataSheet_();
+  ensureDataHeaders_(sheet);
+  appendMappedRow_(sheet, {
+    'Timestamp': new Date(),
+    'Full data': code,
+    'QRcode data': code,
+    'Name': 'NA',
+    'Remark': '',
+  });
 }
 
 function parseStudentInfo_(decodedText) {
   const text = String(decodedText || '').trim();
-  const match = text.match(/^([A-Za-z0-9]+)-([A-Za-z0-9]+)\(([^)]+)\)\s*(.*)$/);
+  const match = text.match(/^(\S+-\S+\([^)]*\))\s*(.*)$/);
 
   if (!match) {
     return {
-      className: '',
-      code: text,
-      session: '',
-      name: '',
+      qrCodeData: text,
+      name: 'NA',
     };
   }
 
   return {
-    className: match[1],
-    code: match[2],
-    session: match[3],
-    name: match[4],
+    qrCodeData: match[1],
+    name: String(match[2] || '').trim() || 'NA',
   };
 }
 
@@ -222,21 +223,39 @@ function getHeaderColumnIndex_(sheet, headerName) {
 
 function migrateDataSheetColumns() {
   const sheet = getDataSheet_();
-  const lastColumn = sheet.getLastColumn();
+  const rows = sheet.getDataRange().getValues();
+  const headerMap = rows.length ? buildHeaderMapFromValues_(rows[0]) : {};
+  const migratedRows = [];
 
-  if (lastColumn >= 2) {
-    const headerValues = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-    const locationColumnIndex = headerValues.findIndex(function(header) {
-      const normalized = String(header || '').trim().toLowerCase();
-      return normalized === 'location' || normalized === '位置';
-    });
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    const timestamp = getMappedRowValue_(row, headerMap, ['Timestamp']);
+    const fullData = getMappedRowValue_(row, headerMap, ['Full data', 'Decoded QR text']) || getMappedRowValue_(row, headerMap, ['QRcode data', 'Candidate Code']);
+    const parsed = parseStudentInfo_(fullData);
+    const existingName = getMappedRowValue_(row, headerMap, ['Name']);
+    const remark = getMappedRowValue_(row, headerMap, ['Remark']);
 
-    if (locationColumnIndex !== -1) {
-      sheet.deleteColumn(locationColumnIndex + 1);
+    if (!timestamp && !fullData && !existingName && !remark) {
+      continue;
     }
+
+    migratedRows.push([
+      timestamp || '',
+      fullData || '',
+      parsed.qrCodeData || fullData || '',
+      parsed.name !== 'NA' ? parsed.name : (existingName || 'NA'),
+      remark || '',
+    ]);
   }
 
-  ensureHeaderRow_(sheet);
+  sheet.clear();
+  sheet.getRange(1, 1, 1, DATA_HEADERS.length).setValues([DATA_HEADERS]);
+
+  if (migratedRows.length) {
+    sheet.getRange(2, 1, migratedRows.length, DATA_HEADERS.length).setValues(migratedRows);
+  }
+
+  trimDataSheetColumns_(sheet);
 
   return {
     ok: true,
@@ -244,6 +263,30 @@ function migrateDataSheetColumns() {
     sheetName: SHEET_NAME,
     spreadsheetId: SPREADSHEET_ID,
   };
+}
+
+function buildHeaderMapFromValues_(headers) {
+  const map = {};
+
+  headers.forEach(function(header, index) {
+    const normalized = String(header || '').trim();
+    if (normalized) {
+      map[normalized] = index;
+    }
+  });
+
+  return map;
+}
+
+function getMappedRowValue_(row, headerMap, headers) {
+  for (let index = 0; index < headers.length; index += 1) {
+    const header = headers[index];
+    if (headerMap[header] !== undefined) {
+      return row[headerMap[header]];
+    }
+  }
+
+  return '';
 }
 
 function getDataSheet_() {
@@ -257,19 +300,92 @@ function getDataSheet_() {
   return sheet;
 }
 
-function ensureHeaderRow_(sheet) {
+function ensureDataHeaders_(sheet) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(DATA_HEADERS);
     return;
   }
 
-  sheet.getRange(1, 1, 1, DATA_HEADERS.length).setValues([DATA_HEADERS]);
+  getHeaderMap_(sheet);
 }
 
-function ensureHeaderRowIfEmpty_(sheet) {
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(DATA_HEADERS);
+function appendMappedRow_(sheet, valuesByHeader) {
+  const columnMap = getHeaderMap_(sheet);
+  const lastColumn = sheet.getLastColumn();
+  const row = new Array(lastColumn).fill('');
+
+  DATA_HEADERS.forEach(function(header) {
+    row[columnMap[header] - 1] = valuesByHeader[header] || '';
+  });
+
+  sheet.appendRow(row);
+}
+
+function keepDataColumns_(sheet) {
+  ensureDataHeaders_(sheet);
+
+  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const columnsToDelete = [];
+
+  currentHeaders.forEach(function(header, index) {
+    if (DATA_HEADERS.indexOf(String(header || '').trim()) === -1) {
+      columnsToDelete.push(index + 1);
+    }
+  });
+
+  columnsToDelete.reverse().forEach(function(columnIndex) {
+    sheet.deleteColumn(columnIndex);
+  });
+
+  ensureDataHeaders_(sheet);
+  trimDataSheetColumns_(sheet);
+}
+
+function trimDataSheetColumns_(sheet) {
+  const desiredColumns = DATA_HEADERS.length;
+  const maxColumns = sheet.getMaxColumns();
+
+  if (maxColumns > desiredColumns) {
+    sheet.deleteColumns(desiredColumns + 1, maxColumns - desiredColumns);
+  } else if (maxColumns < desiredColumns) {
+    sheet.insertColumnsAfter(maxColumns, desiredColumns - maxColumns);
   }
+}
+
+function getHeaderMap_(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const headers = lastColumn
+    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    : [];
+  const map = {};
+
+  headers.forEach(function(header, index) {
+    const normalized = String(header || '').trim();
+    if (normalized) {
+      map[normalized] = index + 1;
+    }
+  });
+
+  DATA_HEADERS.forEach(function(header, index) {
+    if (!map[header]) {
+      const nextColumn = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextColumn).setValue(header);
+      map[header] = nextColumn;
+    }
+  });
+
+  return map;
+}
+
+function getAttendanceListSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(ATTENDANCE_LIST_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error('找不到名稱為「' + ATTENDANCE_LIST_SHEET_NAME + '」的工作表，請檢查試算表內的分頁名稱。');
+  }
+
+  return sheet;
 }
 
 function validateApiKey_(providedKey) {
