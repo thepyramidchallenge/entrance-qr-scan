@@ -26,6 +26,12 @@ clasp deploy
 
 After deployment, copy the Apps Script Web App URL into `frontend/config.js`.
 
+Current Web App URL:
+
+```text
+https://script.google.com/macros/s/AKfycbwOM1Aqk2PtEKQ6uyQJeJzosmfPwYMspzrzuzbvW5uIhszCG-ekJbutibRvtJRzpozvAQ/exec
+```
+
 Optional: set the script property `SCANNER_API_KEY`. If it is set, the frontend must send the same `API_KEY` in `frontend/config.js`.
 
 ## Frontend
