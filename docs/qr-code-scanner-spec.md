@@ -10,12 +10,12 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 
 | Item | Layer | Value | Notes |
 | --- | --- | --- | --- |
-| Scanner frontend | GitHub Pages / static hosting | `frontend/` | Root `index.html` redirects to `frontend/`. |
+| Scanner frontend | GitHub Pages / static hosting | `https://thepyramidchallenge.github.io/entrance-qr-scan/` | Root `index.html` serves the scanner directly. |
 | GitHub repo | GitHub | `thepyramidchallenge/entrance-qr-scan` | Source for scanner frontend, Apps Script source, and docs. |
 | Apps Script web app | Apps Script | `https://script.google.com/macros/s/AKfycbwpImYsJwBTIncEH3T4y9qx-GKKdxUUlq873LJxBFXkpF_srfiPGHLZE9w8_wwiARc/exec` | Configured in `frontend/config.js`. |
 | Apps Script version marker | Apps Script | `2026-06-03-data-schema-v8` | Returned by backend responses. |
 | Google Sheet database | Google Sheet | `1MWlGS3gMx0Ahfl1iFDSyL7ajRH0zaz5xIRPKwqMfIck` | Contains `Data`, `Student Info`, and `Attendance list`. |
-| Scanner library | Browser dependency | `html5-qrcode@2.3.8` | Loaded from unpkg in `frontend/index.html`. |
+| Scanner library | Browser dependency | `html5-qrcode@2.3.8` | Loaded from unpkg in root `index.html` and `frontend/index.html`. |
 | Brand color | UI | `#14647F` | Header, primary buttons, focus rings, and success accents use this blue. |
 
 ## Component Ownership
@@ -181,6 +181,12 @@ window.SCANNER_CONFIG = {
 
 Camera access requires HTTPS. GitHub Pages or another HTTPS static host is
 expected.
+
+The staff-facing GitHub Pages URL is:
+
+```text
+https://thepyramidchallenge.github.io/entrance-qr-scan/
+```
 
 ### Apps Script
 

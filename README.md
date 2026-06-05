@@ -1,12 +1,14 @@
 # Pyramid Challenge QR Scanner
 
-Mobile-friendly QR scanner for staff check-in. The frontend is a static web app
-hosted from `frontend/`, and the backend is a Google Apps Script web app in
-`backend/` that writes scan/manual records into Google Sheets.
+Mobile-friendly QR scanner for staff check-in. The public scanner page is served
+from the repository root, with frontend assets in `frontend/`. The backend is a
+Google Apps Script web app in `backend/` that writes scan/manual records into
+Google Sheets.
 
 ## Repository Structure
 
-- `frontend/` - static scanner UI for GitHub Pages or any HTTPS static host.
+- `index.html` - public GitHub Pages entry point for the scanner.
+- `frontend/` - scanner assets and source files used by the root page.
 - `backend/` - Google Apps Script project managed with clasp.
 - `docs/` - reference specifications and planning notes.
 
@@ -150,7 +152,13 @@ https://script.google.com/macros/s/AKfycbwpImYsJwBTIncEH3T4y9qx-GKKdxUUlq873LJxB
 Optional: set the Apps Script property `SCANNER_API_KEY`. If it is set,
 `frontend/config.js` must send the same `API_KEY`.
 
-Deploy the `frontend/` folder to GitHub Pages or another HTTPS static host.
+Deploy the repository root to GitHub Pages or another HTTPS static host. The
+staff-facing URL should be:
+
+```text
+https://thepyramidchallenge.github.io/entrance-qr-scan/
+```
+
 Camera access requires HTTPS on most mobile browsers.
 
 ## Apps Script Deployment

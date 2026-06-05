@@ -3,14 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=./frontend/">
   <title>Pyramid Challenge QR Scanner</title>
-  <link rel="canonical" href="./frontend/">
+  <link rel="stylesheet" href="./frontend/styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="./frontend/config.js"></script>
 </head>
 <body>
-  <script>
-    window.location.replace('./frontend/');
-  </script>
-  <p><a href="./frontend/">Open Pyramid Challenge QR Scanner</a></p>
+  <header class="app-header">
+    <img class="brand-logo" src="./frontend/assets/tpc-logo-header-eng.png" alt="The Pyramid Challenge">
+    <h1>QR Code Scanner</h1>
+  </header>
+
+  <main class="app-main">
+    <section class="scanner-view" id="scanner-view">
+      <div class="scanner-panel">
+        <div id="qr-reader"></div>
+      </div>
+      <div class="scanner-actions">
+        <button class="manual-code-button" id="manual-code-button" type="button">手寫code</button>
+      </div>
+      <p class="error-message" id="scanner-error" hidden></p>
+    </section>
+
+    <div class="dialog-backdrop" id="dialog-backdrop" hidden></div>
+
+    <section class="dialog" id="confirm-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="dialog-body">
+        <p class="decoded-text" id="decoded-text"></p>
+        <input type="text" id="remark" placeholder="請輸入備註 (如有)" aria-label="備註">
+        <p class="error-message" id="error-message" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="cancel-button" type="button">取消</button>
+        <button class="primary-button" id="confirm-button" type="button">確認</button>
+      </div>
+    </section>
+
+    <section class="dialog" id="manual-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="dialog-body">
+        <textarea id="manual-code" rows="2" placeholder="請輸入考生編號&#10;(e.g. 0999)" aria-label="考生編號"></textarea>
+        <input type="text" id="manual-remark" placeholder="請輸入備註 (如有)" aria-label="備註">
+        <p class="error-message" id="manual-error-message" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="manual-cancel-button" type="button">取消</button>
+        <button class="primary-button" id="manual-confirm-button" type="button">確認</button>
+      </div>
+    </section>
+
+    <div class="status" id="status" role="status" hidden></div>
+  </main>
+
+  <script src="./frontend/app.js"></script>
 </body>
 </html>
