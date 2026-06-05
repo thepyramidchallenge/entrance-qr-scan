@@ -12,8 +12,8 @@ hosted from `frontend/`, and the backend is a Google Apps Script web app in
 
 ## Documentation
 
-- [Add-On Trial Web App Specification](docs/add-on-trial-web-app-spec.md) -
-  reference spec extracted from `Add-On Trial Planning_v1.0.xlsx`.
+- [QR Code Scanner Specification](docs/qr-code-scanner-spec.md) - handover
+  spec for the scanner frontend, Apps Script backend, and Google Sheet schema.
 
 ## Staff Workflow
 
