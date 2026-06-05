@@ -47,9 +47,9 @@ body {
 
 .brand-logo {
   display: block;
-  width: min(360px, 86vw);
+  width: min(468px, 94vw);
   height: auto;
-  max-height: 64px;
+  max-height: 83px;
   object-fit: contain;
 }
 
@@ -301,8 +301,8 @@ textarea:focus {
   }
 
   .brand-logo {
-    width: min(460px, 70vw);
-    max-height: 72px;
+    width: min(598px, 78vw);
+    max-height: 94px;
   }
 
   .dialog {
