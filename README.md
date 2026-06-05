@@ -94,8 +94,8 @@ Examples:
 
 | Full QR text | `Scanned data` | `Name` |
 | --- | --- | --- |
-| `P4-YPYB0101(Ⅰ-A1) 王思諭 Wong Sze Yu Angie` | `P4-YPYB0101(Ⅰ-A1)` | `王思諭 Wong Sze Yu Angie` |
-| `P1-YPYA0101(1Z) 吳梓淳 Ng Tsz Shun` | `P1-YPYA0101(1Z)` | `吳梓淳 Ng Tsz Shun` |
+| `P4-DEMO0101(Ⅰ-A1) 測試學生 Test Student A` | `P4-DEMO0101(Ⅰ-A1)` | `測試學生 Test Student A` |
+| `P1-DEMO0202(1Z) 示例學生 Sample Student B` | `P1-DEMO0202(1Z)` | `示例學生 Sample Student B` |
 
 If the parsed name is missing, `Name` is saved as `NA`.
 

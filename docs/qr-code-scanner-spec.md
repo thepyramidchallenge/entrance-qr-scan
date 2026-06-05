@@ -211,16 +211,16 @@ Optional security: if Apps Script property `SCANNER_API_KEY` is set, frontend
 The backend parses scanned QR text with this shape:
 
 ```text
-P4-YPYB0101(Ⅰ-A1) 王思諭 Wong Sze Yu Angie
+P4-DEMO0101(Ⅰ-A1) 測試學生 Test Student A
 ```
 
 Output:
 
 | Field | Value |
 | --- | --- |
-| `Full data` | `P4-YPYB0101(Ⅰ-A1) 王思諭 Wong Sze Yu Angie` |
-| `Scanned data` | `P4-YPYB0101(Ⅰ-A1)` |
-| `Name` | `王思諭 Wong Sze Yu Angie` |
+| `Full data` | `P4-DEMO0101(Ⅰ-A1) 測試學生 Test Student A` |
+| `Scanned data` | `P4-DEMO0101(Ⅰ-A1)` |
+| `Name` | `測試學生 Test Student A` |
 
 If the name part is missing, `Name` is saved as `NA`. If the QR text does not
 match the expected pattern, the full text is still saved as `Scanned data` and
