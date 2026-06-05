@@ -18,6 +18,23 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 | Scanner library | Browser dependency | `html5-qrcode@2.3.8` | Loaded from unpkg in root `index.html` and `frontend/index.html`. |
 | Brand color | UI | `#14647F` | Header, primary buttons, focus rings, and success accents use this blue. |
 
+## Requirement Overview
+
+| Area | Current requirement / decision | Status | Notes |
+| --- | --- | --- | --- |
+| Staff URL | Staff should open the root GitHub Pages URL without `/frontend/`. | Implemented | Root `index.html` serves the scanner directly. |
+| Camera startup | Scanner camera turns on automatically when the page loads. | Implemented | Uses rear camera where supported through `facingMode: environment`. |
+| Location selection | No registration/front-door location selection is required. | Removed | Scanner records no location field. |
+| QR scan confirmation | Scanned QR data is shown before staff confirm recording. | Implemented | Staff can add optional remark or cancel. |
+| Manual fallback | Staff can tap `手寫code` to manually record a candidate code. | Implemented | Manual dialog includes candidate code and optional remark. |
+| Manual validation | Manual candidate code must match `Student Info` -> `Refined_QRcode`. | Implemented | Backend validates before writing to `Data`. |
+| Google Sheet writes | All successful scan/manual actions append or write a mapped row into `Data`. | Implemented | Header mapping is name-based. |
+| Formula-managed column | `Final_QRCode` must never be written by Apps Script. | Mandatory | Google Sheets arrayformula owns this column. |
+| Staff feedback | Both confirm buttons show loading dots; success shows `已成功登記🌟`. | Implemented | Success message displays for 5 seconds. |
+| Branding | Header includes company logo and `QR Code Scanner`; blue is `#14647F`. | Implemented | Other blue shades should not be introduced. |
+| Performance | Manual validation and data header lookup are cached briefly. | Implemented | Cache TTL is 5 minutes. |
+| Documentation | README links to this scanner-specific handover spec. | Implemented | Non-scanner project content is out of scope. |
+
 ## Component Ownership
 
 | Layer | Primary responsibility | Owned functions | Not owned / avoid |
@@ -39,6 +56,32 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 | Manual cancel | Staff taps `取消` | Dialog closes, fields are cleared, camera restarts. | None | Back to scanner page. |
 | Manual confirm | Staff taps `確認` in manual dialog | Confirm button is disabled and shows animated three dots; status shows `正在處理...`. | JSONP request with `manualCode`, `remark`, and optional `key`. | Backend validates code. Success records the row; failure shows `你輸入的考生編號格式錯誤`. |
 
+## Sections And Fields
+
+| Section | UI name / element | Type | Mandatory | Source / destination | Validation / logic | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Header | Company logo | Image | Yes | `frontend/assets/tpc-logo-header-eng.png` | Must render at root URL and `/frontend/` URL. | Alt text is `The Pyramid Challenge`. |
+| Header | `QR Code Scanner` | View-only heading | Yes | Static HTML | Must remain visible. | User specifically requested this wording. |
+| Scanner | Camera reader | Camera/video region | Yes | Browser camera via `html5-qrcode` | Starts on page load. Stops while dialogs are open. | Shows scan area inside `#qr-reader`. |
+| Scanner | `手寫code` | Button | Yes | Frontend action | Opens manual dialog and stops scanner. | Fixed at bottom for mobile use. |
+| Scan dialog | Decoded QR text | View-only text | Yes after scan | `decodedText` from QR reader | Empty decoded text cannot be confirmed. | Sent to backend as `decodedText`. |
+| Scan dialog | Remark | Text input | No | `Data` -> `Remark` | No format validation. | Placeholder: `請輸入備註 (如有)`. |
+| Scan dialog | Error message | View-only text | No | Frontend/backend error | Hidden when no error. | Used for scan recording errors. |
+| Manual dialog | Candidate code | Textarea | Yes | `Student Info` validation; `Data` write | Trimmed in frontend; cleaned/validated in backend. | Placeholder is two lines: `請輸入考生編號` and `(e.g. 0999)`. |
+| Manual dialog | Remark | Text input | No | `Data` -> `Remark` | No format validation. | Placeholder: `請輸入備註 (如有)`. |
+| Manual dialog | Error message | View-only text | No | Backend validation error | Hidden when no error. | Shows `你輸入的考生編號格式錯誤` for invalid manual input. |
+| Global status | Status toast | View-only text | No | Frontend state / backend success message | Hidden when empty. | Success is shown for 5 seconds. |
+
+## Buttons And Actions
+
+| Button | Context | Enabled when | Action | Failure behavior | Success behavior |
+| --- | --- | --- | --- | --- | --- |
+| `手寫code` | Scanner page | No request is processing | Stops scanner and opens manual dialog. | If scanner stop fails, error is logged in console and dialog still opens if possible. | Manual dialog appears with empty fields. |
+| `取消` | Scan dialog | Dialog is open and request is not processing | Closes scan dialog, clears remark, restarts scanner. | None expected. | Returns to scanner page. |
+| `確認` | Scan dialog | Dialog is open, request is not processing, decoded text exists, `WEB_APP_URL` exists | Sends JSONP request with scanned text and remark. | Shows backend/network error in scan dialog; clears processing status. | Writes row, closes dialog, restarts scanner, shows `已成功登記🌟`. |
+| `取消` | Manual dialog | Dialog is open and request is not processing | Closes manual dialog, clears manual code and remark, restarts scanner. | None expected. | Returns to scanner page. |
+| `確認` | Manual dialog | Dialog is open, request is not processing, manual code is non-empty, `WEB_APP_URL` exists | Sends JSONP request with manual code and remark. | Shows manual error, usually `你輸入的考生編號格式錯誤`; clears processing status. | Writes row, closes dialog, restarts scanner, shows success message. |
+
 ## UI Specification
 
 | Area | Current behavior |
@@ -55,6 +98,29 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 | Success state | `已成功登記🌟` appears at the bottom for 5 seconds in brand blue. |
 | Error state | Manual validation failure shows `你輸入的考生編號格式錯誤`. |
 
+## User-Facing Text
+
+| Context | Text | When shown |
+| --- | --- | --- |
+| Header title | `QR Code Scanner` | Always visible at top of scanner. |
+| Manual entry button | `手寫code` | Always visible at bottom scanner action bar. |
+| Cancel buttons | `取消` | Scan and manual dialogs. |
+| Confirm buttons | `確認` | Scan and manual dialogs before loading state. |
+| Confirm loading | `.`, `..`, `...` | Animated on the active confirm button while request is pending. |
+| Processing status | `正在處理...` | After staff taps either confirm button. |
+| Success status | `已成功登記🌟` | After successful scan or manual record. |
+| Scan remark placeholder | `請輸入備註 (如有)` | Scan confirmation dialog. |
+| Manual code placeholder line 1 | `請輸入考生編號` | Manual dialog candidate code field. |
+| Manual code placeholder line 2 | `(e.g. 0999)` | Manual dialog candidate code field. |
+| Manual remark placeholder | `請輸入備註 (如有)` | Manual dialog remark field. |
+| Empty scan error | `沒有掃描到 QR code` | Scan confirm attempted without decoded text. |
+| Empty manual error | `請輸入考生編號` | Manual confirm attempted with blank input. |
+| Missing config error | `請先在 frontend/config.js 設定 Apps Script Web App URL。` | Confirm attempted without configured backend URL. |
+| Invalid manual code | `你輸入的考生編號格式錯誤` | Backend cannot find the cleaned manual code in `Student Info`. |
+| Backend timeout | `Apps Script backend 未有回應，請檢查網絡或部署設定。` | JSONP request exceeds 15 seconds. |
+| Backend connection error | `無法連接 Apps Script backend。` | JSONP script load fails. |
+| Camera startup error | `無法啟動相機：...` | Browser/camera start fails. |
+
 ## Google Sheet Schema
 
 ### Required Tabs
@@ -64,6 +130,14 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 | `Data` | Append-only scanner output | Apps Script maps columns by header name. |
 | `Student Info` | Manual-code validation source | `Student info` is accepted as a fallback tab name. |
 | `Attendance list` | Attendance matching view | Conditional formatting is managed in Google Sheets. |
+
+### Sheet Ownership Rules
+
+| Sheet | Owned by | Write mode | Rules |
+| --- | --- | --- | --- |
+| `Data` | Apps Script + Google Sheets formulas | Apps Script writes mapped row values; Sheets owns formulas. | Keep only expected scanner columns unless intentionally extending schema. |
+| `Student Info` | Operations / Google Sheet data refresh | Read-only for scanner. | Refresh records here; do not let scanner write here. |
+| `Attendance list` | Operations / Google Sheet formulas and formatting | Read-only for scanner. | Conditional formatting should compare attendance QR values with scanner output. |
 
 ### `Data` Columns
 
@@ -76,6 +150,13 @@ of the scanner frontend, Apps Script backend, and Google Sheet schema.
 | `Remark` | Yes | Optional staff remark | Comes from scan or manual dialog. |
 | `Final_QRCode` | No | Google Sheets arrayformula | Apps Script must never write into this column. |
 | `Manual input data` | Yes | Manual candidate code | Blank for scanned QR records. |
+
+### Record Type Matrix
+
+| Record type | `Full data` | `Scanned data` | `Name` | `Remark` | `Manual input data` |
+| --- | --- | --- | --- | --- | --- |
+| Scanned QR | Full decoded QR text | Parsed candidate code from decoded text | Parsed name or `NA` | Optional scan remark | Blank |
+| Manual code | Cleaned manual code | Blank | `NA` | Optional manual remark | Cleaned manual code |
 
 ### `Student Info` Validation Columns
 
@@ -106,6 +187,22 @@ column.
 
 Optional security: if Apps Script property `SCANNER_API_KEY` is set, frontend
 `API_KEY` must match it.
+
+### Backend Helper Contract
+
+| Helper / area | Responsibility | Important behavior |
+| --- | --- | --- |
+| `recordData` | Record a scanned QR result. | Requires decoded text, parses candidate/name, writes mapped `Data` row. |
+| `recordManualCode` | Record a manual code result. | Cleans and validates manual code before writing mapped `Data` row. |
+| `parseStudentInfo_` | Split scanned QR text into candidate code and name. | Expected pattern is first non-space code containing parentheses, then optional name. |
+| `cleanCandidateCode_` | Normalize candidate codes for matching. | Trims, removes whitespace, normalizes hyphen variants, uppercases. |
+| `candidateCodesMatch_` | Compare manual input with sheet values. | Allows exact match or manual prefix before `(` / `（`. |
+| `getQrCodeLookupSheet_` | Resolve validation source sheet. | Looks for `Student Info`, then `Student info`. |
+| `getHeaderColumnIndex_` | Resolve required headers by name/alias. | Normalizes headers by trimming, lowercasing, and removing spaces. |
+| `ensureDataHeaders_` / `getHeaderMap_` | Maintain `Data` headers. | Adds missing expected headers and caches header map when stable. |
+| `getNextWritableRow_` | Find row for the next record. | Uses `Timestamp` column, not formula-filled columns. |
+| `writeMappedRows_` | Write row data efficiently. | Groups contiguous writable columns and skips `Final_QRCode`. |
+| `validateApiKey_` | Optional request protection. | Enforces `SCANNER_API_KEY` only when script property exists. |
 
 ## Parsing And Validation
 
@@ -166,6 +263,18 @@ Manual record mapping:
 | Timestamp-based next row | Apps Script finds the next writable row from `Timestamp`, so formulas in `Final_QRCode` do not make blank rows appear occupied. |
 | Grouped writes | Apps Script writes contiguous column groups and skips formula-managed headers. |
 
+## Current Limitations And Future Options
+
+| Item | Current status | Reason | Future approach |
+| --- | --- | --- | --- |
+| Offline scanning | Not supported | Apps Script and Google Sheets require network access. | Add local queue + retry only if staff need unstable-network support. |
+| Duplicate prevention | Not enforced in frontend | Current workflow records each successful confirmation. | Add backend duplicate check against `Final_QRCode` or recent `Data` rows if duplicate prevention becomes required. |
+| Admin dashboard | Out of scope | Google Sheets is the operations interface. | Build a read-only dashboard only if staff need non-Sheet reporting. |
+| Location tracking | Removed | Registration/front-door split is no longer required. | Reintroduce only if operations again require separate checkpoints. |
+| Direct CORS fetch | Not used | Apps Script web app CORS behavior is awkward for static hosting. | Keep JSONP unless backend moves to a CORS-friendly service. |
+| Camera selection UI | Not exposed | Staff are expected to use mobile rear camera by default. | Add camera picker only if staff report wrong-camera issues. |
+| Automated end-to-end test | Partial/manual | Camera and Apps Script deployment make full automation harder. | Add a mock backend mode for UI regression tests if the project grows. |
+
 ## Deployment Notes
 
 ### Frontend
@@ -204,15 +313,19 @@ URL.
 
 ## Maintenance Checklist
 
-- Confirm `frontend/config.js` points to the intended Apps Script deployment.
-- Confirm the deployed backend version marker is current.
-- Confirm `Data`, `Student Info`, and `Attendance list` tabs exist.
-- Confirm `Data` headers match the schema and `Final_QRCode` remains formula-managed.
-- Confirm `Student Info` has `Refined_QRcode` or a supported alias.
-- Confirm a valid manual code records into `Full data` and `Manual input data`.
-- Confirm an invalid manual code returns `你輸入的考生編號格式錯誤`.
-- Confirm a scanned QR record parses `Scanned data` and `Name`.
-- Confirm the success message appears for 5 seconds after scan/manual success.
+| Check | Expected result |
+| --- | --- |
+| Root URL opens | `https://thepyramidchallenge.github.io/entrance-qr-scan/` loads scanner without `/frontend/` in the visible link. |
+| Frontend config | `frontend/config.js` points to the intended Apps Script deployment. |
+| Backend version | Apps Script health/default response returns the expected version marker. |
+| Required tabs | `Data`, `Student Info`, and `Attendance list` exist. |
+| Data schema | `Data` headers match the schema and `Final_QRCode` remains formula-managed. |
+| Validation source | `Student Info` has `Refined_QRcode` or a supported alias. |
+| Valid manual code | Records into `Full data` and `Manual input data`; `Name` is `NA`. |
+| Invalid manual code | Returns `你輸入的考生編號格式錯誤` and writes no row. |
+| Scanned QR record | Parses `Scanned data` and `Name`; `Manual input data` stays blank. |
+| Success feedback | `已成功登記🌟` appears for 5 seconds after scan/manual success. |
+| Loading feedback | Active `確認` button shows animated dots while backend request is pending. |
 
 ## Troubleshooting
 
